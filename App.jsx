@@ -1,4 +1,3 @@
-```react
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Square, Repeat, ArrowRight, Music, Video, Image as ImageIcon, List, MonitorPlay, Loader2, Globe } from 'lucide-react';
 
@@ -104,7 +103,6 @@ export default function App() {
 
   const wakeLockRef = useRef(null);
 
-  // --- WAKE LOCK ---
   useEffect(() => {
     const requestWakeLock = async () => {
       try {
@@ -129,7 +127,6 @@ export default function App() {
     };
   }, []);
 
-  // --- AUTO LOAD SESSION ---
   useEffect(() => {
     const restoreSession = async () => {
       const savedSettings = localStorage.getItem('TanMixPro_Settings');
@@ -239,7 +236,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-300 font-sans select-none flex flex-col h-screen overflow-hidden">
       
-      {/* HEADER / TABS */}
       <div className="bg-[#0a0a0a] flex items-center px-2 pt-2 overflow-x-auto border-b border-[#222] hide-scrollbar flex-shrink-0 shadow-md z-10">
         {TABS.map(tab => {
           const Icon = tab.icon;
@@ -258,7 +254,6 @@ export default function App() {
         
         <div className="flex-grow"></div>
         
-        {/* NÚT CHUYỂN ĐỔI NGÔN NGỮ */}
         <button 
           onClick={() => setLang(lang === 'vi' ? 'en' : 'vi')}
           className="bg-[#111] text-zinc-400 font-bold text-[10px] px-3 py-1.5 rounded hover:bg-[#222] hover:text-white active:scale-95 transition-all mr-6 border border-[#333] flex items-center gap-1.5 shadow-md"
@@ -273,7 +268,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* MAIN WORKSPACE - Nền True Black (#050505) */}
       <div className="flex flex-1 overflow-hidden p-2.5 gap-2.5 bg-[#050505]">
         <div className="flex-1 overflow-y-auto hide-scrollbar pr-1 relative">
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5 pb-20">
@@ -298,7 +292,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* MASTER SLIDER PANEL - Màu Titanium Gray sáng sủa nổi bật */}
         <div className="w-16 md:w-20 bg-[#2a2a2a] rounded-lg border border-[#444] p-2 flex flex-col items-center shadow-[0_10px_30px_rgba(0,0,0,0.8)] flex-shrink-0 relative">
           <div className="w-full bg-[#111] border border-[#2a2a2a] rounded py-1 mb-2 text-center shadow-inner">
              <span className="text-[10px] text-zinc-400 font-extrabold tracking-widest">MASTER</span>
@@ -325,7 +318,6 @@ export default function App() {
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* GIAO DIỆN BÀN MIXER (FADER) */
         .volume-fader {
           -webkit-appearance: none;
           appearance: none;
@@ -360,8 +352,6 @@ export default function App() {
     </div>
   );
 }
-
-// --- SUB COMPONENTS ---
 
 function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoad, masterVolume, onUpdateSettings, onToggleLoop, lang }) {
   const t = DICT[lang];
@@ -518,7 +508,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
   const activeColor = channel.color || 'red'; 
   const theme = colorMap[activeColor];
 
-  // Action Pad: Độ tương phản cao
   const padColor = !channel.audioUrl 
     ? 'bg-[#111] text-[#555] border border-[#333] border-dashed cursor-not-allowed shadow-inner' 
     : isPlaying 
@@ -534,7 +523,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
   const zIndexClass = (isMenuOpen || showSettings || showSeeker) ? 'z-[100] shadow-[0_0_20px_rgba(0,0,0,0.8)]' : 'z-0';
 
   return (
-    // THAY ĐỔI LỚN TẠI ĐÂY: Dùng Titanium Gray (#2a2a2a) sáng sủa, tách biệt rõ ràng với True Black (#050505) của App
     <div className={`bg-[#27272a] rounded-lg border border-[#3f3f46] p-2 flex-col items-center hover:bg-[#303036] hover:border-[#52525b] transition-all relative group shadow-lg ${isVisible ? 'flex' : 'hidden'} ${zIndexClass}`}>
       
       {showSettings && (
@@ -615,7 +603,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
         className="hidden" 
       />
 
-      {/* HEADER CỦA CUE */}
       <div className="w-full flex justify-between items-center mb-2 relative z-50">
         <Music size={12} className={channel.audioUrl ? "text-emerald-400 drop-shadow-[0_0_2px_rgba(52,211,153,0.8)]" : "text-[#777]"} />
         
@@ -672,7 +659,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
         </div>
       </div>
 
-      {/* VOLUME SLIDER */}
       <div className="h-20 w-full flex justify-center items-center my-1 relative z-0">
          <input
           type="range"
@@ -685,7 +671,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
         />
       </div>
       
-      {/* KHỐI HIỂN THỊ THÔNG TIN MÀN HÌNH LED (Dìm đen để lõm xuống) */}
       <div className="w-full bg-[#0a0a0a] border border-[#18181b] rounded flex flex-col items-center py-1 mb-2 mt-1 shadow-inner">
         <div className="flex justify-between w-full px-2 items-center mb-0.5">
           <span className="text-[9px] font-bold text-zinc-500">VOL</span>
@@ -697,7 +682,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
         <span className="text-[9px] font-mono font-bold text-[#666]">{channel.audioUrl ? durationStr : '00:00:00'}</span>
       </div>
 
-      {/* BIG ACTION PAD */}
       <button 
         onClick={channel.audioUrl ? handleMainPadClick : undefined}
         className={`w-full h-11 rounded font-bold transition-all active:scale-95 mb-2 flex items-center justify-center p-1.5 overflow-hidden relative z-0 ${padColor}`}
@@ -711,7 +695,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
         </span>
       </button>
 
-      {/* TRANSPORT CONTROLS - (Dìm đen để giả lập nút cứng lõm xuống) */}
       <div className="flex w-full gap-1.5 mb-2 relative z-0">
         <button 
           onClick={handlePlayPauseClick}
@@ -727,7 +710,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
         </button>
       </div>
 
-      {/* BOTTOM TRIGGERS */}
       <div className="flex w-full justify-between items-center px-1 mt-1">
         <div className="flex items-center gap-1 opacity-60">
            <div className="w-1.5 h-1.5 rounded-full bg-[#666]"></div>
@@ -752,6 +734,3 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
     </div>
   );
 }
-
-
-```
