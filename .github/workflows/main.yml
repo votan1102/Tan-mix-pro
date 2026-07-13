@@ -51,8 +51,9 @@ jobs:
           echo "org.gradle.java.home=$JAVA_HOME" >> android/gradle.properties
           ./node_modules/.bin/cap sync android
 
-      - name: 7.5. [TRỌNG TÀI] Xử lý lỗi trùng thư viện
+      - name: 7.5. [CẤM CỬA] Ép dùng duy nhất 1 bản Kotlin
         run: |
+          echo "configurations.all { exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8' }" >> app-build/android/app/build.gradle
           echo "configurations.all { resolutionStrategy { force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22' } }" >> app-build/android/app/build.gradle
 
       - name: 8. Build file APK Android
