@@ -15,28 +15,25 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 3. Cài đặt Java 17 (Cho Android)
+      - name: 3. Cài đặt Java 21 (Phiên bản mới nhất)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
-      - name: 4. Khởi tạo dự án React
+      - name: 4. Khởi tạo dự án
         run: |
           npm create vite@latest app-build -- --template react
           cd app-build
           npm install
           npm install lucide-react
 
-      - name: 5. Cài đặt TailwindCSS v4 & Nhúng Code
+      - name: 5. Cấu hình Tailwind v4 & Nhúng Code
         run: |
           cd app-build
           npm install tailwindcss @tailwindcss/vite
-          # Tạo file cấu hình Vite chuẩn v4 mới nhất
           echo "import { defineConfig } from 'vite'; import react from '@vitejs/plugin-react'; import tailwindcss from '@tailwindcss/vite'; export default defineConfig({ plugins: [react(), tailwindcss()] });" > vite.config.js
-          # Ghi đè file CSS chuẩn v4
           echo '@import "tailwindcss"; body { background-color: #050505; overscroll-behavior: none; }' > src/index.css
-          # Đưa code App.jsx của anh Tấn vào
           cp ../App.jsx src/App.jsx
 
       - name: 6. Build Web
@@ -49,9 +46,10 @@ jobs:
           cd app-build
           npm install @capacitor/core @capacitor/android
           npm install -D @capacitor/cli
-          # Gọi thẳng lõi hệ thống để không bị kẹt câu hỏi Yes/No
           ./node_modules/.bin/cap init TanMixPro com.anhtan.mixpro --web-dir dist
           ./node_modules/.bin/cap add android
+          # Ép buộc Android dùng Java 21
+          echo "org.gradle.java.home=$JAVA_HOME" >> android/gradle.properties
           ./node_modules/.bin/cap sync android
 
       - name: 8. Build file APK Android
