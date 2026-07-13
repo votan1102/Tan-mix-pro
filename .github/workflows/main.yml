@@ -7,59 +7,57 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Lấy mã nguồn
+      - name: 1. Lấy mã nguồn
         uses: actions/checkout@v4
 
-      - name: Cài đặt Node.js (Đã nâng cấp bản mới)
+      - name: 2. Cài đặt Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
 
-      - name: Kiểm tra sự tồn tại của file App.jsx
-        run: |
-          if [ ! -f "App.jsx" ]; then
-            echo "❌ LỖI: KHÔNG TÌM THẤY FILE 'App.jsx' TRONG KHO CHỨA CỦA ANH TẤN!"
-            echo "Anh vui lòng quay lại trang chủ, tạo file tên là 'App.jsx' (Chữ A viết hoa) và dán code vào nhé."
-            exit 1
-          else
-            echo "✅ Đã tìm thấy file App.jsx, chuẩn bị Build!"
-          fi
-
-      - name: Cài đặt Java (Cho Android)
+      - name: 3. Cài đặt Java 17 (Cho Android)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Xây dựng bộ khung React & Tailwind
+      - name: 4. Khởi tạo dự án React (Bỏ qua câu hỏi Y/N)
         run: |
-          npx --yes create-vite@latest app-build --template react
+          npm create vite@latest app-build -- --template react
           cd app-build
           npm install
           npm install lucide-react
           npm install -D tailwindcss postcss autoprefixer
-          npx --yes tailwindcss init -p
+          npx tailwindcss init -p
+
+      - name: 5. Cấu hình giao diện và Nhúng code
+        run: |
+          cd app-build
           echo "/** @type {import('tailwindcss').Config} */ export default { content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'], theme: { extend: {} }, plugins: [], }" > tailwind.config.js
           echo "@tailwind base; @tailwind components; @tailwind utilities; body { background-color: #050505; overscroll-behavior: none; }" > src/index.css
           cp ../App.jsx src/App.jsx
 
-      - name: Tích hợp lõi Capacitor (Trình bọc Mobile)
+      - name: 6. Build Web (Kiểm tra lỗi Code)
+        run: |
+          cd app-build
+          npm run build
+
+      - name: 7. Tích hợp Mobile Capacitor
         run: |
           cd app-build
           npm install @capacitor/core @capacitor/android
           npm install -D @capacitor/cli
           npx cap init TanMixPro com.anhtan.mixpro --web-dir dist
-          npm run build
           npx cap add android
           npx cap sync android
 
-      - name: Tiến hành Build file APK
+      - name: 8. Build file APK Android
         run: |
           cd app-build/android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Đóng gói và Gửi File APK
+      - name: 9. Đóng gói và Gửi File APK
         uses: actions/upload-artifact@v4
         with:
           name: Tan-Mix-Pro-App
