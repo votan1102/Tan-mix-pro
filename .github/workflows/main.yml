@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Lấy mã nguồn
+      - name: 1. Lấy mã nguồn & Logo
         uses: actions/checkout@v4
 
       - name: 2. Cài đặt Node.js
@@ -51,7 +51,16 @@ jobs:
           echo "org.gradle.java.home=$JAVA_HOME" >> android/gradle.properties
           ./node_modules/.bin/cap sync android
 
-      - name: 7.5. [CẤM CỬA] Ép dùng duy nhất 1 bản Kotlin
+      - name: 7.2. [THƯƠNG HIỆU] Thay Logo
+        run: |
+          # Cài công cụ tự động thay logo
+          cd app-build
+          npm install --save-dev @capacitor/assets
+          cp ../logo.png assets/logo.png
+          # Lệnh này tự động cắt logo thành đủ mọi kích thước Android yêu cầu
+          npx @capacitor/assets generate --iconPath assets/logo.png --platforms android
+
+      - name: 7.5. [TRỌNG TÀI] Xử lý lỗi trùng thư viện
         run: |
           echo "configurations.all { exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8' }" >> app-build/android/app/build.gradle
           echo "configurations.all { resolutionStrategy { force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22' } }" >> app-build/android/app/build.gradle
