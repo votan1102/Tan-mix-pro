@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 3. Cài đặt Java 21 (Phiên bản mới nhất)
+      - name: 3. Cài đặt Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
@@ -48,9 +48,12 @@ jobs:
           npm install -D @capacitor/cli
           ./node_modules/.bin/cap init TanMixPro com.anhtan.mixpro --web-dir dist
           ./node_modules/.bin/cap add android
-          # Ép buộc Android dùng Java 21
           echo "org.gradle.java.home=$JAVA_HOME" >> android/gradle.properties
           ./node_modules/.bin/cap sync android
+
+      - name: 7.5. [TRỌNG TÀI] Xử lý lỗi trùng thư viện
+        run: |
+          echo "configurations.all { resolutionStrategy { force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22' } }" >> app-build/android/app/build.gradle
 
       - name: 8. Build file APK Android
         run: |
