@@ -51,14 +51,14 @@ jobs:
           echo "org.gradle.java.home=$JAVA_HOME" >> android/gradle.properties
           ./node_modules/.bin/cap sync android
 
-      - name: 7.2. [THƯƠNG HIỆU] Thay Logo (Sửa lỗi tạo thư mục)
+      - name: 7.2. [THƯƠNG HIỆU] Thay Logo (Cập nhật cú pháp mới)
         run: |
           cd app-build
           npm install --save-dev @capacitor/assets
-          # Tự động tạo thư mục assets nếu chưa có để tránh lỗi No such file
           mkdir -p assets
           cp ../logo.png assets/logo.png
-          npx @capacitor/assets generate --iconPath assets/logo.png --platforms android
+          # Cập nhật lệnh --icon chuẩn xác theo phiên bản mới nhất
+          npx @capacitor/assets generate --icon --platforms android
 
       - name: 7.5. [TRỌNG TÀI] Xử lý lỗi trùng thư viện
         run: |
