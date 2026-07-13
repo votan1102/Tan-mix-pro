@@ -21,18 +21,18 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 4. Khởi tạo dự án React (Ép buộc Yes)
+      - name: 4. Khởi tạo dự án React
         run: |
           npx --yes create-vite@latest app-build --template react
           cd app-build
           npm install
           npm install lucide-react
           npm install -D tailwindcss postcss autoprefixer
-          npx --yes tailwindcss init -p
 
-      - name: 5. Cấu hình giao diện và Nhúng code
+      - name: 5. Tạo file cấu hình thủ công (Lách lỗi npx)
         run: |
           cd app-build
+          echo "export default { plugins: { tailwindcss: {}, autoprefixer: {} } }" > postcss.config.js
           echo "/** @type {import('tailwindcss').Config} */ export default { content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'], theme: { extend: {} }, plugins: [], }" > tailwind.config.js
           echo "@tailwind base; @tailwind components; @tailwind utilities; body { background-color: #050505; overscroll-behavior: none; }" > src/index.css
           cp ../App.jsx src/App.jsx
@@ -42,14 +42,15 @@ jobs:
           cd app-build
           npm run build
 
-      - name: 7. Tích hợp Mobile Capacitor (Ép buộc Yes)
+      - name: 7. Tích hợp Mobile Capacitor (Trực tiếp vào lõi)
         run: |
           cd app-build
           npm install @capacitor/core @capacitor/android
           npm install -D @capacitor/cli
-          npx --yes cap init TanMixPro com.anhtan.mixpro --web-dir dist
-          npx --yes cap add android
-          npx --yes cap sync android
+          # Gọi trực tiếp file hệ thống để bỏ qua hoàn toàn lỗi của npx
+          ./node_modules/.bin/cap init TanMixPro com.anhtan.mixpro --web-dir dist
+          ./node_modules/.bin/cap add android
+          ./node_modules/.bin/cap sync android
 
       - name: 8. Build file APK Android
         run: |
