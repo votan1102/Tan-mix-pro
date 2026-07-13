@@ -10,10 +10,20 @@ jobs:
       - name: Lấy mã nguồn
         uses: actions/checkout@v4
 
-      - name: Cài đặt Node.js
+      - name: Cài đặt Node.js (Đã nâng cấp bản mới)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+
+      - name: Kiểm tra sự tồn tại của file App.jsx
+        run: |
+          if [ ! -f "App.jsx" ]; then
+            echo "❌ LỖI: KHÔNG TÌM THẤY FILE 'App.jsx' TRONG KHO CHỨA CỦA ANH TẤN!"
+            echo "Anh vui lòng quay lại trang chủ, tạo file tên là 'App.jsx' (Chữ A viết hoa) và dán code vào nhé."
+            exit 1
+          else
+            echo "✅ Đã tìm thấy file App.jsx, chuẩn bị Build!"
+          fi
 
       - name: Cài đặt Java (Cho Android)
         uses: actions/setup-java@v4
@@ -23,12 +33,12 @@ jobs:
 
       - name: Xây dựng bộ khung React & Tailwind
         run: |
-          npx create-vite@latest app-build --template react
+          npx --yes create-vite@latest app-build --template react
           cd app-build
           npm install
           npm install lucide-react
           npm install -D tailwindcss postcss autoprefixer
-          npx tailwindcss init -p
+          npx --yes tailwindcss init -p
           echo "/** @type {import('tailwindcss').Config} */ export default { content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'], theme: { extend: {} }, plugins: [], }" > tailwind.config.js
           echo "@tailwind base; @tailwind components; @tailwind utilities; body { background-color: #050505; overscroll-behavior: none; }" > src/index.css
           cp ../App.jsx src/App.jsx
