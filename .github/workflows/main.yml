@@ -23,18 +23,20 @@ jobs:
 
       - name: 4. Khởi tạo dự án React
         run: |
-          npx --yes create-vite@latest app-build --template react
+          npm create vite@latest app-build -- --template react
           cd app-build
           npm install
           npm install lucide-react
-          npm install -D tailwindcss postcss autoprefixer
 
-      - name: 5. Tạo file cấu hình thủ công (Lách lỗi npx)
+      - name: 5. Cài đặt TailwindCSS v4 & Nhúng Code
         run: |
           cd app-build
-          echo "export default { plugins: { tailwindcss: {}, autoprefixer: {} } }" > postcss.config.js
-          echo "/** @type {import('tailwindcss').Config} */ export default { content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'], theme: { extend: {} }, plugins: [], }" > tailwind.config.js
-          echo "@tailwind base; @tailwind components; @tailwind utilities; body { background-color: #050505; overscroll-behavior: none; }" > src/index.css
+          npm install tailwindcss @tailwindcss/vite
+          # Tạo file cấu hình Vite chuẩn v4 mới nhất
+          echo "import { defineConfig } from 'vite'; import react from '@vitejs/plugin-react'; import tailwindcss from '@tailwindcss/vite'; export default defineConfig({ plugins: [react(), tailwindcss()] });" > vite.config.js
+          # Ghi đè file CSS chuẩn v4
+          echo '@import "tailwindcss"; body { background-color: #050505; overscroll-behavior: none; }' > src/index.css
+          # Đưa code App.jsx của anh Tấn vào
           cp ../App.jsx src/App.jsx
 
       - name: 6. Build Web
@@ -42,12 +44,12 @@ jobs:
           cd app-build
           npm run build
 
-      - name: 7. Tích hợp Mobile Capacitor (Trực tiếp vào lõi)
+      - name: 7. Tích hợp Mobile Capacitor
         run: |
           cd app-build
           npm install @capacitor/core @capacitor/android
           npm install -D @capacitor/cli
-          # Gọi trực tiếp file hệ thống để bỏ qua hoàn toàn lỗi của npx
+          # Gọi thẳng lõi hệ thống để không bị kẹt câu hỏi Yes/No
           ./node_modules/.bin/cap init TanMixPro com.anhtan.mixpro --web-dir dist
           ./node_modules/.bin/cap add android
           ./node_modules/.bin/cap sync android
@@ -58,7 +60,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: 9. Đóng gói và Gửi File APK
+      - name: 9. Xuất File APK
         uses: actions/upload-artifact@v4
         with:
           name: Tan-Mix-Pro-App
