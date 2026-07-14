@@ -51,26 +51,28 @@ jobs:
           echo "org.gradle.java.home=$JAVA_HOME" >> android/gradle.properties
           ./node_modules/.bin/cap sync android
 
-      - name: 7.2. [THƯƠNG HIỆU] Gắn Logo thủ công (Lách mọi lỗi công cụ)
+      - name: 7.2. [THƯƠNG HIỆU] Gắn Logo phẳng & Xóa cấu hình Adaptive Icon
         run: |
-          # Định nghĩa các đường dẫn chứa icon mặc định của Android trong dự án
           RES_DIR="app-build/android/app/src/main/res"
           
-          # Sao chép đè file logo.png của anh vào tất cả các thư mục icon mipmap với tên ic_launcher.png
+          # 1. Xóa sạch các thư mục xml cấu hình Adaptive Icon mặc định (Tránh hệ thống ưu tiên icon cũ)
+          rm -rf "$RES_DIR/mipmap-anydpi-v26"
+          
+          # 2. Sao chép đè file logo.png của anh Tấn vào tất cả các thư mục icon chính (ic_launcher.png)
           cp logo.png "$RES_DIR/mipmap-mdpi/ic_launcher.png"
           cp logo.png "$RES_DIR/mipmap-hdpi/ic_launcher.png"
           cp logo.png "$RES_DIR/mipmap-xhdpi/ic_launcher.png"
           cp logo.png "$RES_DIR/mipmap-xxhdpi/ic_launcher.png"
           cp logo.png "$RES_DIR/mipmap-xxxhdpi/ic_launcher.png"
           
-          # Sao chép luôn cho cả phiên bản icon tròn (Round)
+          # 3. Sao chép đè cho cả phiên bản icon tròn (ic_launcher_round.png)
           cp logo.png "$RES_DIR/mipmap-mdpi/ic_launcher_round.png"
           cp logo.png "$RES_DIR/mipmap-hdpi/ic_launcher_round.png"
           cp logo.png "$RES_DIR/mipmap-xhdpi/ic_launcher_round.png"
           cp logo.png "$RES_DIR/mipmap-xxhdpi/ic_launcher_round.png"
           cp logo.png "$RES_DIR/mipmap-xxxhdpi/ic_launcher_round.png"
           
-          echo "✅ Đã thay thế toàn bộ icon ứng dụng bằng logo.png thành công!"
+          echo "✅ Đã ép Android dùng duy nhất logo.png phẳng thành công!"
 
       - name: 7.5. [TRỌNG TÀI] Xử lý lỗi trùng thư viện
         run: |
