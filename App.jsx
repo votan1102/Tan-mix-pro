@@ -353,6 +353,7 @@ export default function App() {
   );
 }
 
+// --- Đoạn cấu trúc ChannelPad đã được vá lỗi bọc thép hoàn chỉnh ---
 function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoad, masterVolume, onUpdateSettings, onToggleLoop, lang }) {
   const t = DICT[lang];
   const isPlaying = channel.isPlaying;
@@ -362,7 +363,6 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
   const audioRef = useRef(null);
   const fileInputRef = useRef(null);
   const fadeIntervalRef = useRef(null);
-  const isFadingOutRef = useRef(false);
 
   const volumeRef = useRef({ channel: channel.volume, master: masterVolume });
 
@@ -378,26 +378,35 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
   const [tempFadeIn, setTempFadeIn] = useState(0);
   const [tempFadeOut, setTempFadeOut] = useState(0);
 
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.pause();
+  // Dọn dẹp fade cũ tránh xung đột đa nhiệm
+  const clearFade = () => {
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
     }
-  }, []);
+  };
+
+  // Đồng bộ lại audio instance khi audioUrl thay đổi (Khắc phục lỗi Rehydration của Audio 01)
+  useEffect(() => {
+    if (audioRef.current && channel.audioUrl) {
+      audioRef.current.load();
+      clearFade();
+    }
+  }, [channel.audioUrl]);
 
   useEffect(() => {
     volumeRef.current = { channel: channel.volume, master: masterVolume };
-    if (audioRef.current && isPlaying && !fadeIntervalRef.current && !isFadingOutRef.current) {
+    if (audioRef.current && isPlaying) {
       audioRef.current.volume = (channel.volume / 100) * (masterVolume / 100);
     }
   }, [channel.volume, masterVolume, isPlaying]);
 
   const playAction = () => {
     if (!audioRef.current || !channel.audioUrl) return;
-    clearInterval(fadeIntervalRef.current);
-    fadeIntervalRef.current = null;
-    isFadingOutRef.current = false;
+    clearFade();
     audioRef.current.loop = channel.loop;
+
+    const targetVol = (volumeRef.current.channel / 100) * (volumeRef.current.master / 100);
 
     if (channel.fadeIn > 0 && !isPaused) {
       audioRef.current.volume = 0;
@@ -406,18 +415,16 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
         const startTime = Date.now();
         fadeIntervalRef.current = setInterval(() => {
           const elapsed = Date.now() - startTime;
-          const targetVol = (volumeRef.current.channel / 100) * (volumeRef.current.master / 100);
           if (elapsed >= duration) {
             audioRef.current.volume = targetVol;
-            clearInterval(fadeIntervalRef.current);
-            fadeIntervalRef.current = null;
+            clearFade();
           } else {
             audioRef.current.volume = (elapsed / duration) * targetVol;
           }
-        }, 20); 
+        }, 30); 
       }).catch(e => console.log(e));
     } else {
-      audioRef.current.volume = (volumeRef.current.channel / 100) * (volumeRef.current.master / 100);
+      audioRef.current.volume = targetVol;
       audioRef.current.play().catch(e => console.log(e));
     }
     onSetState('PLAYING');
@@ -425,38 +432,26 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
 
   const stopAction = () => {
     if (!audioRef.current) return;
-    if (isFadingOutRef.current) {
-      clearInterval(fadeIntervalRef.current);
-      fadeIntervalRef.current = null;
-      isFadingOutRef.current = false;
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setCurrentTimeStr('00:00:00');
-      setCurrentSec(0);
-      onSetState('STOPPED');
-      return;
-    }
+    clearFade();
+
     if (channel.fadeOut > 0 && isPlaying) {
-      isFadingOutRef.current = true;
       const startVol = audioRef.current.volume;
       const duration = channel.fadeOut * 1000;
       const startTime = Date.now();
+      
       fadeIntervalRef.current = setInterval(() => {
         const elapsed = Date.now() - startTime;
         if (elapsed >= duration) {
-          audioRef.current.volume = 0;
-          clearInterval(fadeIntervalRef.current);
-          fadeIntervalRef.current = null;
-          isFadingOutRef.current = false;
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
           setCurrentTimeStr('00:00:00');
           setCurrentSec(0);
+          clearFade();
           onSetState('STOPPED');
         } else {
           audioRef.current.volume = startVol * (1 - (elapsed / duration));
         }
-      }, 20);
+      }, 30);
     } else {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -468,9 +463,7 @@ function ChannelPad({ channel, isVisible, onSetState, onVolumeChange, onAudioLoa
 
   const pauseAction = () => {
     if (!audioRef.current) return;
-    clearInterval(fadeIntervalRef.current);
-    fadeIntervalRef.current = null;
-    isFadingOutRef.current = false;
+    clearFade();
     audioRef.current.pause();
     onSetState('PAUSED');
   };
