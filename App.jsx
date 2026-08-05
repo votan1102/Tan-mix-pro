@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Repeat, ArrowRight, Music, Video, Image as ImageIcon, List, MonitorPlay, Loader2, Globe } from 'lucide-react';
+import { Play, Pause, Square, Repeat, Music, Video, Image as ImageIcon, List, MonitorPlay, Loader2, Globe } from 'lucide-react';
 
 // --- DICTIONARY ---
 const DICT = {
@@ -9,12 +9,12 @@ const DICT = {
     fadeSettings: 'Cài đặt Fade',
     cancel: 'Hủy',
     save: 'LƯU',
-    seekTime: 'Dò Thời Gian',
     done: 'HOÀN TẤT',
     addAudio: '🎵 THÊM BÀI HÁT',
     fadeSetup: '⚙️ CHỈNH FADE',
+    reset: '🗑️ XÓA BÀI HÁT',
     empty: 'TRỐNG',
-    noTrack: 'CHƯA CHỌN BÀI HÁT NÀO',
+    noTrack: 'KHÔNG CÓ BÀI HÁT ĐANG PHÁT',
     analyzing: 'Đang phân tích sóng âm...'
   },
   en: {
@@ -23,12 +23,12 @@ const DICT = {
     fadeSettings: 'Fade Settings',
     cancel: 'Cancel',
     save: 'SAVE',
-    seekTime: 'Seek Time',
     done: 'DONE',
     addAudio: '🎵 ADD AUDIO',
     fadeSetup: '⚙️ FADE SETUP',
+    reset: '🗑️ CLEAR TRACK',
     empty: 'EMPTY',
-    noTrack: 'NO TRACK SELECTED',
+    noTrack: 'NO TRACK PLAYING',
     analyzing: 'Analyzing waveform...'
   }
 };
@@ -72,7 +72,17 @@ const loadAudioFromDB = async (id) => {
   });
 };
 
-// --- SINGLETON AUDIO CONTEXT (FIX LỖI TRÀN RAM ANDROID) ---
+const removeAudioFromDB = async (id) => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+};
+
+// --- SINGLETON AUDIO CONTEXT ---
 let globalAudioCtx = null;
 const getAudioContext = () => {
   if (!globalAudioCtx) {
@@ -259,11 +269,13 @@ export default function App() {
   const [focusedChannelId, setFocusedChannelId] = useState(null);
   const [crossfadeEvent, setCrossfadeEvent] = useState(null);
 
+  const activePlayingCount = channels.filter(ch => ch.isPlaying).length;
+  
+  // LỌC NGHIÊM NGẶT: Chỉ Focus các bản nhạc ĐANG HOẠT ĐỘNG (Phát hoặc Tạm dừng)
+  const focusedChannel = channels.find(ch => ch.id === focusedChannelId && (ch.isPlaying || ch.isPaused));
+
   const wakeLockRef = useRef(null);
   const silentAudioRef = useRef(null);
-
-  const activePlayingCount = channels.filter(ch => ch.isPlaying).length;
-  const focusedChannel = channels.find(ch => ch.id === focusedChannelId);
 
   const initBackgroundEngine = () => {
     if (backgroundEngineStarted) return;
@@ -272,7 +284,6 @@ export default function App() {
       navigator.mediaSession.metadata = new MediaMetadata({ title: 'TẤN Mix-Pro', artist: 'Sẵn sàng' });
       navigator.mediaSession.playbackState = "playing";
     }
-    // Kích hoạt luôn AudioContext toàn cục
     getAudioContext();
     setBackgroundEngineStarted(true);
   };
@@ -377,7 +388,6 @@ export default function App() {
   };
 
   const handleAudioLoad = async (id, file) => {
-    // FIX 2: Ép dữ liệu thành cấu trúc Blob chuẩn để IndexedDB Android không thu hồi quyền
     const arrayBuffer = await file.arrayBuffer();
     const cleanBlob = new Blob([arrayBuffer], { type: file.type });
     const url = URL.createObjectURL(cleanBlob);
@@ -400,10 +410,8 @@ export default function App() {
       });
     });
     
-    setFocusedChannelId(id);
     await saveAudioToDB(id, cleanBlob);
 
-    // Kích hoạt context nếu bị hệ điều hành đóng băng
     getAudioContext();
     const waveData = await extractWaveform(cleanBlob);
     
@@ -412,6 +420,37 @@ export default function App() {
       saveSessionSettings(next); 
       return next;
     });
+  };
+
+  const handleResetChannel = async (id) => {
+    setChannels(prev => {
+      const next = prev.map(ch => {
+        if (ch.id === id) {
+          if (ch.audioUrl) URL.revokeObjectURL(ch.audioUrl);
+          return {
+            ...ch,
+            name: ch.id === 1 ? 'Applause' : ch.id === 2 ? 'Child' : ch.id === 3 ? 'Dog' : ch.id === 4 ? 'Drum Roll' : ch.id === 5 ? 'Glass Break' : `Audio ${ch.id}`,
+            audioUrl: null,
+            isPlaying: false,
+            isPaused: false,
+            hasAudioData: false,
+            waveform: [],
+            originalDuration: '00:00:00',
+            fadeIn: 0,
+            fadeOut: 0,
+            loop: false,
+            volume: 100,
+            color: 'red'
+          };
+        }
+        return ch;
+      });
+      saveSessionSettings(next);
+      return next;
+    });
+    
+    if (focusedChannelId === id) setFocusedChannelId(null);
+    await removeAudioFromDB(id);
   };
 
   if (!isAppReady) {
@@ -486,6 +525,7 @@ export default function App() {
                   onVolumeChange={(v) => updateVolume(channel.id, v)}
                   onUpdateSettings={(settings) => updateChannelSettings(channel.id, settings)}
                   onAudioLoad={handleAudioLoad}
+                  onResetChannel={() => handleResetChannel(channel.id)}
                   onToggleLoop={() => toggleLoop(channel.id)}
                   lang={lang}
                 />
@@ -520,10 +560,7 @@ export default function App() {
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* FIX 3: CHỐNG CUỘN TRANG KHI KÉO THANH CẢM ỨNG TRÊN ĐIỆN THOẠI */
-        .no-touch-scroll {
-          touch-action: none; 
-        }
+        .no-touch-scroll { touch-action: none; }
 
         .volume-fader {
           -webkit-appearance: none;
@@ -558,20 +595,13 @@ export default function App() {
         
         .btn-3d {
           background: linear-gradient(145deg, #2a2a2a, #111);
-          box-shadow: 
-            0 4px 0 #050505, 
-            0 5px 10px rgba(0,0,0,0.8), 
-            inset 0 1px 1px rgba(255,255,255,0.1),
-            inset 0 -1px 2px rgba(0,0,0,0.5);
+          box-shadow: 0 4px 0 #050505, 0 5px 10px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.5);
           border: 1px solid #333;
           transition: all 0.1s ease;
         }
         .btn-3d:active {
           transform: translateY(4px);
-          box-shadow: 
-            0 0px 0 #050505, 
-            0 2px 5px rgba(0,0,0,0.8), 
-            inset 0 2px 5px rgba(0,0,0,0.9);
+          box-shadow: 0 0px 0 #050505, 0 2px 5px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.9);
           background: linear-gradient(145deg, #111, #1a1a1a);
         }
       `}} />
@@ -582,7 +612,7 @@ export default function App() {
 // ==========================================
 // COMPONENT: CHANNEL PAD
 // ==========================================
-function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, onAudioLoad, masterVolume, activePlayingCount, crossfadeEvent, onPlayRequested, onUpdateSettings, onToggleLoop, lang }) {
+function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, onAudioLoad, onResetChannel, masterVolume, activePlayingCount, crossfadeEvent, onPlayRequested, onUpdateSettings, onToggleLoop, lang }) {
   const t = DICT[lang];
   const isPlaying = channel.isPlaying;
   const isPaused = channel.isPaused;
@@ -603,7 +633,6 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showSeeker, setShowSeeker] = useState(false);
   const [tempFadeIn, setTempFadeIn] = useState(0);
   const [tempFadeOut, setTempFadeOut] = useState(0);
 
@@ -704,7 +733,6 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
   const stopAction = () => {
     if (!audioRef.current) return;
     clearFade();
-    onFocus(channel.id); 
 
     if (channel.fadeOut > 0 && isPlaying) {
       const startVol = audioRef.current.volume;
@@ -750,6 +778,19 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
     window.dispatchEvent(new CustomEvent(`timeUpdate-${channel.id}`, { 
       detail: { current: newTime, duration: audioRef.current.duration || 0 } 
     }));
+  };
+
+  const handleResetClick = (e) => {
+    e.stopPropagation();
+    clearFade();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src'); 
+      audioRef.current.load();
+    }
+    onSetState('STOPPED');
+    onResetChannel();
+    setIsMenuOpen(false);
   };
 
   useEffect(() => {
@@ -806,12 +847,12 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
     ? `${theme.bg} ${theme.text} px-2 py-0.5 rounded shadow-sm border border-black/50` 
     : 'text-[#666]';
 
-  const zIndexClass = (isMenuOpen || showSettings || showSeeker) ? 'z-[100] shadow-[0_0_20px_rgba(0,0,0,0.8)]' : 'z-0';
+  const zIndexClass = (isMenuOpen || showSettings) ? 'z-[100] shadow-[0_0_20px_rgba(0,0,0,0.8)]' : 'z-0';
 
   return (
     <div 
       className={`bg-[#27272a] rounded-lg border border-[#3f3f46] p-2 flex-col items-center hover:bg-[#303036] hover:border-[#52525b] transition-all relative group shadow-lg ${isVisible ? 'flex' : 'hidden'} ${zIndexClass}`}
-      onClick={() => onFocus(channel.id)} 
+      onClick={() => { if (isPlaying || isPaused) onFocus(channel.id); }} 
     >
       
       {showSettings && (
@@ -829,33 +870,6 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
              <button onClick={() => setShowSettings(false)} className="flex-1 bg-[#3f3f46] py-2 text-xs font-bold rounded hover:bg-[#52525b] text-zinc-300 transition-colors border border-[#52525b]">{t.cancel}</button>
              <button onClick={() => { onUpdateSettings({ fadeIn: tempFadeIn, fadeOut: tempFadeOut }); setShowSettings(false); }} className="flex-1 bg-emerald-600 text-white py-2 text-xs font-bold rounded hover:bg-emerald-500 transition-colors border border-emerald-700">{t.save}</button>
           </div>
-        </div>
-      )}
-
-      {showSeeker && (
-        <div className="absolute inset-[-1px] bg-[#18181b] z-[120] flex flex-col items-center justify-center p-3 rounded-lg border border-[#3f3f46] shadow-[0_15px_40px_rgba(0,0,0,1)]" onClick={e => e.stopPropagation()}>
-          <h4 className="text-[11px] font-bold mb-3 text-white uppercase tracking-wider">{t.seekTime}</h4>
-          <div className="w-full flex flex-col items-center gap-2 mb-5">
-            <span className="text-2xl font-mono font-bold text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]">{formatTime(currentSec)}</span>
-            <input
-              type="range"
-              min="0"
-              max={durationSec || 0}
-              step="0.1"
-              value={currentSec}
-              onChange={(e) => {
-                const newTime = parseFloat(e.target.value);
-                if (audioRef.current) audioRef.current.currentTime = newTime;
-                setCurrentSec(newTime);
-                setCurrentTimeStr(formatTime(newTime));
-              }}
-              className="w-full h-2 bg-black border border-[#3f3f46] rounded-full appearance-none outline-none cursor-pointer accent-emerald-500 no-touch-scroll"
-            />
-            <span className="text-[10px] text-[#888] font-mono font-bold mt-1">TOTAL: {durationStr}</span>
-          </div>
-          <button onClick={() => setShowSeeker(false)} className="w-full bg-[#3f3f46] py-2 text-xs font-bold rounded hover:bg-[#52525b] text-white transition-colors border border-[#52525b]">
-            {t.done}
-          </button>
         </div>
       )}
 
@@ -946,6 +960,13 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
                      className={`w-4 h-4 rounded-full bg-[#d97706] hover:scale-110 transition-transform ${activeColor === 'yellow' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#111]' : 'opacity-70'}`}
                    />
                 </div>
+                
+                <button 
+                  onClick={handleResetClick}
+                  className="text-[10px] text-left px-3 py-2.5 bg-[#1a0f0f] hover:bg-[#3a1a1a] text-red-500 transition-colors border-t border-[#3f3f46] font-bold tracking-wide"
+                >
+                  {t.reset}
+                </button>
               </div>
             </>
           )}
@@ -958,7 +979,7 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
           min="0"
           max="100"
           value={channel.volume}
-          onChange={(e) => { onVolumeChange(e.target.value); onFocus(channel.id); }}
+          onChange={(e) => { onVolumeChange(e.target.value); if(isPlaying || isPaused) onFocus(channel.id); }}
           className="volume-fader no-touch-scroll absolute w-[72px] h-2 outline-none cursor-pointer z-10"
           style={{ transform: 'rotate(-90deg)' }}
         />
@@ -996,30 +1017,20 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
           {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
         </button>
         <button 
-          onClick={(e) => { e.stopPropagation(); onFocus(channel.id); stopAction(); }}
+          onClick={(e) => { e.stopPropagation(); if (isPlaying || isPaused) onFocus(channel.id); stopAction(); }}
           className="flex-1 flex justify-center items-center py-2 rounded bg-[#18181b] hover:bg-[#111] transition-colors border border-[#3f3f46] shadow-inner text-zinc-400 hover:text-red-500"
         >
           <Square size={14} fill="currentColor" />
         </button>
       </div>
 
-      <div className="flex w-full justify-between items-center px-1 mt-1">
-        <div className="flex items-center gap-1 opacity-60">
-           <div className="w-1.5 h-1.5 rounded-full bg-[#666]"></div>
-           <div className="w-1.5 h-1.5 rounded-full bg-[#666]"></div>
-        </div>
+      <div className="flex w-full justify-center items-center px-1 mt-1">
         <div className="flex gap-2 items-center">
           <Repeat 
             size={14} 
-            onClick={(e) => { e.stopPropagation(); onFocus(channel.id); onToggleLoop(channel.id); }}
+            onClick={(e) => { e.stopPropagation(); if (isPlaying || isPaused) onFocus(channel.id); onToggleLoop(channel.id); }}
             className={`cursor-pointer transition-colors ${channel.loop ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(16,185,129,0.8)]' : 'text-[#777] hover:text-zinc-300'}`} 
             title="Lặp lại bài hát"
-          />
-          <ArrowRight 
-            size={14} 
-            onClick={(e) => { e.stopPropagation(); onFocus(channel.id); if (channel.audioUrl) setShowSeeker(true); }}
-            className={`cursor-pointer transition-colors ${channel.audioUrl ? 'text-[#999] hover:text-white' : 'text-[#555] cursor-not-allowed'}`}
-            title="Dò thời gian (Seek)"
           />
         </div>
       </div>
@@ -1027,4 +1038,5 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
     </div>
   );
 }
+
 
