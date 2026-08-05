@@ -1027,5 +1027,4 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
     </div>
   );
 }
-```eof
 
