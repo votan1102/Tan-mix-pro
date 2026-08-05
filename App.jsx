@@ -33,7 +33,6 @@ const DICT = {
   }
 };
 
-// --- FORMATTER ---
 const formatTime = (timeInSeconds) => {
   if (isNaN(timeInSeconds)) return '00:00:00';
   const h = Math.floor(timeInSeconds / 3600).toString().padStart(2, '0');
@@ -42,24 +41,22 @@ const formatTime = (timeInSeconds) => {
   return `${h}:${m}:${s}`;
 };
 
-// --- DATABASE HELPER (INDEXED DB) ---
+// --- DATABASE HELPER ---
 const DB_NAME = 'TanMixPro_AudioDB';
 const STORE_NAME = 'audio_files';
 
 const initDB = () => new Promise((resolve, reject) => {
   const req = indexedDB.open(DB_NAME, 1);
-  req.onupgradeneeded = (e) => {
-    e.target.result.createObjectStore(STORE_NAME);
-  };
+  req.onupgradeneeded = (e) => { e.target.result.createObjectStore(STORE_NAME); };
   req.onsuccess = () => resolve(req.result);
   req.onerror = () => reject(req.error);
 });
 
-const saveAudioToDB = async (id, file) => {
+const saveAudioToDB = async (id, fileOrBlob) => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(file, id);
+    tx.objectStore(STORE_NAME).put(fileOrBlob, id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -75,15 +72,25 @@ const loadAudioFromDB = async (id) => {
   });
 };
 
-// --- AUDIO WAVEFORM EXTRACTOR ---
-// Hàm phân tích cấu trúc file audio để lấy ra dữ liệu cường độ sóng thực tế
-const extractWaveform = async (file) => {
+// --- SINGLETON AUDIO CONTEXT (FIX LỖI TRÀN RAM ANDROID) ---
+let globalAudioCtx = null;
+const getAudioContext = () => {
+  if (!globalAudioCtx) {
+    globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (globalAudioCtx.state === 'suspended') {
+    globalAudioCtx.resume();
+  }
+  return globalAudioCtx;
+};
+
+const extractWaveform = async (blob) => {
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioCtx = getAudioContext();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     const rawData = audioBuffer.getChannelData(0);
-    const samples = 150; // Chia bài hát thành 150 cột sóng
+    const samples = 150; 
     const blockSize = Math.floor(rawData.length / samples);
     const filteredData = [];
     
@@ -98,16 +105,13 @@ const extractWaveform = async (file) => {
     
     const max = Math.max(...filteredData);
     const multiplier = max ? Math.pow(max, -1) : 1;
-    // Normalize về mảng 0-100%, tối thiểu 2% để luôn thấy cột
     return filteredData.map(n => Math.max(2, Math.round(n * multiplier * 100)));
   } catch (e) {
     console.error("Lỗi phân tích sóng âm:", e);
-    // Fallback: Sóng ngẫu nhiên nếu lỗi định dạng
     return Array.from({length: 150}, () => Math.floor(Math.random() * 50) + 10);
   }
 };
 
-// --- MOCK DATA INITIALIZER ---
 const generateInitialChannels = () => Array.from({ length: 64 }, (_, i) => ({
   id: i + 1,
   name: i === 0 ? 'Applause' : i === 1 ? 'Child' : i === 2 ? 'Dog' : i === 3 ? 'Drum Roll' : i === 4 ? 'Glass Break' : `Audio ${i + 1}`,
@@ -121,7 +125,7 @@ const generateInitialChannels = () => Array.from({ length: 64 }, (_, i) => ({
   color: 'red',
   originalDuration: '00:00:00',
   hasAudioData: false,
-  waveform: [] // Lưu dữ liệu sóng âm
+  waveform: []
 }));
 
 const TABS = [
@@ -134,7 +138,7 @@ const TABS = [
 const SILENT_AUDIO_BASE64 = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
 // ==========================================
-// COMPONENT: BẢNG ĐIỀU KHIỂN TỔNG (PRO DASHBOARD)
+// COMPONENT: PRO DASHBOARD (GLOBAL PANEL)
 // ==========================================
 function GlobalControlPanel({ channel, lang }) {
   const t = DICT[lang];
@@ -176,7 +180,6 @@ function GlobalControlPanel({ channel, lang }) {
   return (
     <div className="flex-grow mx-2 md:mx-4 flex items-center bg-[#111] rounded-lg border border-[#333] px-3 py-2 shadow-[inset_0_2px_15px_rgba(0,0,0,0.8),0_5px_15px_rgba(0,0,0,0.5)] h-[72px] gap-4 transition-all relative overflow-hidden">
       
-      {/* 1. CỤM PHÍM ĐIỀU KHIỂN 3D (Đưa lên trước) */}
       <div className="flex items-center gap-3 shrink-0 border-r border-[#2a2a2a] pr-4 z-10">
         <button 
           onClick={() => handleGlobalAction('PLAY')} 
@@ -198,13 +201,11 @@ function GlobalControlPanel({ channel, lang }) {
         </button>
       </div>
 
-      {/* 2. CỘT SÓNG ÂM THỰC VÀ SEEK BAR */}
       <div className="flex-1 flex flex-col justify-center min-w-0 relative h-full">
         <div className="flex justify-between items-end mb-1 px-1">
           <span className="text-[12px] font-black text-emerald-400 truncate drop-shadow-[0_0_3px_rgba(52,211,153,0.8)] tracking-wide">
             {channel.name}
           </span>
-          {/* CỘT THỜI GIAN NHỎ GỌN TRÊN GÓC */}
           <div className="font-mono text-[11px] text-zinc-400 flex gap-1 bg-black/50 px-2 rounded">
             <span className="text-emerald-300 font-bold">{formatTime(time.current)}</span>
             <span>/</span>
@@ -212,11 +213,9 @@ function GlobalControlPanel({ channel, lang }) {
           </div>
         </div>
         
-        {/* WAVEFORM BAR */}
         <div className="relative w-full h-[32px] flex items-end gap-[1px] group cursor-pointer bg-[#050505] rounded border border-[#222] p-[1px] overflow-hidden">
           {hasWaveform ? (
             channel.waveform.map((val, i) => {
-              // Tính toán vạch sóng nào đã được phát qua
               const isPlayed = (i / channel.waveform.length) * 100 <= progressPercent;
               return (
                 <div
@@ -231,8 +230,6 @@ function GlobalControlPanel({ channel, lang }) {
               {t.analyzing}
             </div>
           )}
-          
-          {/* Thanh Slider Tua Nhạc (Tàng Hình nằm đè lên sóng) */}
           <input
             type="range"
             min="0"
@@ -240,7 +237,7 @@ function GlobalControlPanel({ channel, lang }) {
             step="0.01"
             value={time.current || 0}
             onChange={handleGlobalSeek}
-            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer z-10 m-0"
+            className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer z-10 m-0 no-touch-scroll"
           />
         </div>
       </div>
@@ -275,6 +272,8 @@ export default function App() {
       navigator.mediaSession.metadata = new MediaMetadata({ title: 'TẤN Mix-Pro', artist: 'Sẵn sàng' });
       navigator.mediaSession.playbackState = "playing";
     }
+    // Kích hoạt luôn AudioContext toàn cục
+    getAudioContext();
     setBackgroundEngineStarted(true);
   };
 
@@ -302,7 +301,6 @@ export default function App() {
         const parsedSettings = JSON.parse(savedSettings);
         loadedChannels = loadedChannels.map(ch => {
           const saved = parsedSettings.find(s => s.id === ch.id);
-          // Đảm bảo phục hồi cả mảng waveform nếu có
           if (saved) return { ...ch, ...saved, isPlaying: false, isPaused: false };
           return ch;
         });
@@ -379,9 +377,11 @@ export default function App() {
   };
 
   const handleAudioLoad = async (id, file) => {
-    const url = URL.createObjectURL(file);
+    // FIX 2: Ép dữ liệu thành cấu trúc Blob chuẩn để IndexedDB Android không thu hồi quyền
+    const arrayBuffer = await file.arrayBuffer();
+    const cleanBlob = new Blob([arrayBuffer], { type: file.type });
+    const url = URL.createObjectURL(cleanBlob);
     
-    // Đẩy tạm file vào kênh trước để giao diện không bị treo
     setChannels(prev => {
       return prev.map(ch => {
         if (ch.id === id) {
@@ -393,7 +393,7 @@ export default function App() {
             isPlaying: false, 
             isPaused: false, 
             hasAudioData: true,
-            waveform: [] // Xoá sóng cũ chờ sóng mới
+            waveform: [] 
           };
         }
         return ch;
@@ -401,10 +401,12 @@ export default function App() {
     });
     
     setFocusedChannelId(id);
-    await saveAudioToDB(id, file);
+    await saveAudioToDB(id, cleanBlob);
 
-    // Chạy ngầm tiến trình phân tích sóng âm thực tế
-    const waveData = await extractWaveform(file);
+    // Kích hoạt context nếu bị hệ điều hành đóng băng
+    getAudioContext();
+    const waveData = await extractWaveform(cleanBlob);
+    
     setChannels(prev => {
       const next = prev.map(ch => ch.id === id ? { ...ch, waveform: waveData } : ch);
       saveSessionSettings(next); 
@@ -429,10 +431,7 @@ export default function App() {
     >
       <audio ref={silentAudioRef} src={SILENT_AUDIO_BASE64} loop muted playsInline />
 
-      {/* HEADER BAR (Đã mở rộng chiều cao) */}
       <div className="bg-[#0a0a0a] flex items-center px-2 pt-2 pb-2 overflow-x-auto border-b border-[#222] hide-scrollbar flex-shrink-0 shadow-[0_5px_15px_rgba(0,0,0,0.5)] z-10 w-full">
-        
-        {/* Nhóm Tabs */}
         <div className="flex gap-0 h-[72px]">
           {TABS.map(tab => {
             const Icon = tab.icon;
@@ -450,10 +449,8 @@ export default function App() {
           })}
         </div>
         
-        {/* Bảng điều khiển Tổng */}
         <GlobalControlPanel channel={focusedChannel} lang={lang} />
         
-        {/* Nhóm nút bên phải */}
         <div className="flex flex-col justify-center items-end shrink-0 gap-2 h-[72px] pr-2">
           <button className="bg-gradient-to-b from-amber-300 to-amber-500 text-black font-extrabold text-xs px-6 py-1.5 rounded shadow-[0_0_10px_rgba(251,191,36,0.2)] hover:shadow-[0_0_15px_rgba(251,191,36,0.4)] active:scale-95 transition-all border border-amber-200 w-full text-center">
             TẤN Mix-Pro
@@ -509,7 +506,7 @@ export default function App() {
               max="100"
               value={masterVolume}
               onChange={(e) => handleMasterVolumeChange(e.target.value)}
-              className="volume-fader absolute w-28 md:w-32 h-2 outline-none cursor-pointer"
+              className="volume-fader no-touch-scroll absolute w-28 md:w-32 h-2 outline-none cursor-pointer"
               style={{ transform: 'rotate(-90deg)' }}
             />
           </div>
@@ -519,11 +516,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* 3D BUTTON & CUSTOM FADER STYLES */}
       <style dangerouslySetInnerHTML={{__html: `
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* FIX 3: CHỐNG CUỘN TRANG KHI KÉO THANH CẢM ỨNG TRÊN ĐIỆN THOẠI */
+        .no-touch-scroll {
+          touch-action: none; 
+        }
+
         .volume-fader {
           -webkit-appearance: none;
           appearance: none;
@@ -545,7 +546,16 @@ export default function App() {
           box-shadow: 0px 3px 6px rgba(0,0,0,0.9), inset 0 1px 1px rgba(255,255,255,0.5);
         }
         
-        /* HIỆU ỨNG NÚT BẤM 3D HẦM HỐ */
+        .volume-fader::-moz-range-thumb {
+          height: 26px;
+          width: 16px;
+          background: linear-gradient(to bottom, #e4e4e7, #71717a, #e4e4e7);
+          border: 1px solid #111;
+          border-radius: 3px;
+          cursor: pointer;
+          box-shadow: 0px 3px 6px rgba(0,0,0,0.9), inset 0 1px 1px rgba(255,255,255,0.5);
+        }
+        
         .btn-3d {
           background: linear-gradient(145deg, #2a2a2a, #111);
           box-shadow: 
@@ -610,7 +620,6 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
     }
   }, [crossfadeEvent]);
 
-  // Lắng nghe lệnh từ Bảng Điều Khiển Tổng
   useEffect(() => {
     const handleGlobalCommand = (e) => {
       if (e.detail.id === channel.id) {
@@ -840,7 +849,7 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
                 setCurrentSec(newTime);
                 setCurrentTimeStr(formatTime(newTime));
               }}
-              className="w-full h-2 bg-black border border-[#3f3f46] rounded-full appearance-none outline-none cursor-pointer accent-emerald-500"
+              className="w-full h-2 bg-black border border-[#3f3f46] rounded-full appearance-none outline-none cursor-pointer accent-emerald-500 no-touch-scroll"
             />
             <span className="text-[10px] text-[#888] font-mono font-bold mt-1">TOTAL: {durationStr}</span>
           </div>
@@ -950,7 +959,7 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
           max="100"
           value={channel.volume}
           onChange={(e) => { onVolumeChange(e.target.value); onFocus(channel.id); }}
-          className="volume-fader absolute w-[72px] h-2 outline-none cursor-pointer z-10"
+          className="volume-fader no-touch-scroll absolute w-[72px] h-2 outline-none cursor-pointer z-10"
           style={{ transform: 'rotate(-90deg)' }}
         />
       </div>
@@ -1018,5 +1027,5 @@ function ChannelPad({ channel, isVisible, onSetState, onFocus, onVolumeChange, o
     </div>
   );
 }
-
+```eof
 
